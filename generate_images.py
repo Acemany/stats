@@ -9,24 +9,6 @@ import aiohttp
 from github_stats import Stats
 
 
-################################################################################
-# Helper Functions
-################################################################################
-
-
-def generate_output_folder() -> None:
-    """
-    Create the output folder if it does not already exist
-    """
-    if not os.path.isdir("generated"):
-        os.mkdir("generated")
-
-
-################################################################################
-# Individual Image Generation Functions
-################################################################################
-
-
 async def generate_overview(s: Stats) -> None:
     """
     Generate an SVG badge with summary statistics
@@ -44,7 +26,6 @@ async def generate_overview(s: Stats) -> None:
     output = re.sub("{{ views }}", f"{await s.views:,}", output)
     output = re.sub("{{ repos }}", f"{len(await s.repos):,}", output)
 
-    generate_output_folder()
     with open('generated/overview.svg', 'w', encoding='utf-8') as f:
         f.write(output)
 
@@ -87,14 +68,8 @@ fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8z"></path></svg>
     output = re.sub(r"{{ progress }}", progress, output)
     output = re.sub(r"{{ lang_list }}", lang_list, output)
 
-    generate_output_folder()
     with open('generated/languages.svg', 'w', encoding='utf-8') as f:
         f.write(output)
-
-
-################################################################################
-# Main Function
-################################################################################
 
 
 async def main() -> None:
@@ -118,10 +93,12 @@ async def main() -> None:
     )
     # Convert a truthy value to a Boolean
     raw_ignore_forked_repos = os.getenv("EXCLUDE_FORKED_REPOS")
-    ignore_forked_repos = (
-        not not raw_ignore_forked_repos
-        and raw_ignore_forked_repos.strip().lower() != "false"
-    )
+    ignore_forked_repos = not not\
+        raw_ignore_forked_repos and raw_ignore_forked_repos.strip().lower() != "false"
+
+    if not os.path.isdir("generated"):
+        os.mkdir("generated")
+
     async with aiohttp.ClientSession() as session:
         s = Stats(
             user,

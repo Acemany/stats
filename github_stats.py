@@ -2,12 +2,10 @@
 
 import asyncio
 import os
-from typing import Dict, List, Optional, Set, Tuple, Any, cast
+from typing import Any
 
 import aiohttp
 import requests
-
-
 
 
 class Queries:
@@ -28,7 +26,7 @@ class Queries:
         self.session = session
         self.semaphore = asyncio.Semaphore(max_connections)
 
-    async def query(self, generated_query: str) -> Dict:
+    async def query(self, generated_query: str) -> Any:
         """
         Make a request to the GraphQL API using the authentication token from
         the environment
@@ -48,7 +46,7 @@ class Queries:
             result = await r_async.json()
             if result is not None:
                 return result
-        except Exception:
+        except aiohttp.ContentTypeError:
             print("aiohttp failed for GraphQL query")
             # Fall back on non-async requests
             async with self.semaphore:
@@ -63,7 +61,7 @@ class Queries:
                     return result
         return {}
 
-    async def query_rest(self, path: str, params: Optional[Dict] = None) -> Dict:
+    async def query_rest(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """
         Make a request to the REST API
         :param path: API path to query
@@ -95,7 +93,7 @@ class Queries:
                 result = await r_async.json()
                 if result is not None:
                     return result
-            except Exception:
+            except aiohttp.ContentTypeError:
                 print("aiohttp failed for rest query")
                 # Fall back on non-async requests
                 async with self.semaphore:
@@ -107,9 +105,9 @@ class Queries:
                     )
                     if r_requests.status_code == 202:
                         print("A path returned 202. Retrying...")
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(5)
                         continue
-                    elif r_requests.status_code == 200:
+                    if r_requests.status_code == 200:
                         return r_requests.json()
         # print(f"There were too many 202s. Data for {path} will be incomplete.")
         print("There were too many 202s. Data for this repository will be incomplete.")
@@ -133,7 +131,7 @@ class Queries:
             direction: DESC
         }},
         isFork: false,
-        after: {"null" if owned_cursor is None else '"'+ owned_cursor +'"'}
+        after: {"null" if owned_cursor is None else f'"{owned_cursor}"'}
     ) {{
       pageInfo {{
         hasNextPage
@@ -169,7 +167,7 @@ class Queries:
             REPOSITORY,
             PULL_REQUEST_REVIEW
         ]
-        after: {"null" if contrib_cursor is None else '"'+ contrib_cursor +'"'}
+        after: {"null" if contrib_cursor is None else f'"{contrib_cursor}"'}
     ) {{
       pageInfo {{
         hasNextPage
@@ -260,8 +258,8 @@ class Stats:
     ):
         self.username = username
         self._ignore_forked_repos = ignore_forked_repos
-        self._exclude_repos: set[str] = set() if exclude_repos is None else exclude_repos
-        self._exclude_langs: set[str] = set() if exclude_langs is None else exclude_langs
+        self._exclude_repos = set[str]() if exclude_repos is None else exclude_repos
+        self._exclude_langs = set[str]() if exclude_langs is None else exclude_langs
         self.queries = Queries(username, access_token, session)
 
         self._name: str | None = None
@@ -412,7 +410,7 @@ Languages:
         return self._forks
 
     @property
-    async def languages(self) -> Dict:
+    async def languages(self) -> dict[str, Any]:
         """
         :return: summary of languages used by the user
         """
@@ -423,7 +421,7 @@ Languages:
         return self._languages
 
     @property
-    async def languages_proportional(self) -> Dict:
+    async def languages_proportional(self) -> dict[str, float]:
         """
         :return: summary of languages used by the user, with proportional usage
         """
@@ -470,7 +468,8 @@ Languages:
             self._total_contributions += year.get("contributionCalendar", {}).get(
                 "totalContributions", 0
             )
-        return cast(int, self._total_contributions)
+        assert self._total_contributions is not None
+        return self._total_contributions
 
     @property
     async def lines_changed(self) -> tuple[int, int]:
@@ -482,7 +481,7 @@ Languages:
         additions = 0
         deletions = 0
         for repo in await self.repos:
-            r = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
+            r: list[dict[str, Any] | list[Any]] = await self.queries.query_rest(f"/repos/{repo}/stats/contributors")
             for author_obj in r:
                 # Handle malformed response from the API by skipping this repo
                 if not isinstance(author_obj, dict) or not isinstance(
