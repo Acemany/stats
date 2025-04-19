@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 
-import asyncio
-import os
+from asyncio import Semaphore, sleep, run
 from typing import Any
+from os import getenv
 
-import aiohttp
-import requests
+from aiohttp import ClientSession, ContentTypeError
+from requests import get, post
 
 
 class Queries:
@@ -18,13 +18,13 @@ class Queries:
         self,
         username: str,
         access_token: str,
-        session: aiohttp.ClientSession,
+        session: ClientSession,
         max_connections: int = 10,
     ):
         self.username = username
         self.access_token = access_token
         self.session = session
-        self.semaphore = asyncio.Semaphore(max_connections)
+        self.semaphore = Semaphore(max_connections)
 
     async def query(self, generated_query: str) -> Any:
         """
@@ -46,11 +46,11 @@ class Queries:
             result = await r_async.json()
             if result is not None:
                 return result
-        except aiohttp.ContentTypeError:
+        except ContentTypeError:
             print("aiohttp failed for GraphQL query")
             # Fall back on non-async requests
             async with self.semaphore:
-                r_requests = requests.post(
+                r_requests = post(
                     "https://api.github.com/graphql",
                     headers=headers,
                     json={"query": generated_query},
@@ -86,26 +86,26 @@ class Queries:
                     )
                 if r_async.status == 202:
                     # print(f"{path} returned 202. Retrying...")
-                    print("A path returned 202. Retrying...")
-                    await asyncio.sleep(2)
+                    # print("A path returned 202. Retrying...")
+                    await sleep(2)
                     continue
 
                 result = await r_async.json()
                 if result is not None:
                     return result
-            except aiohttp.ContentTypeError:
+            except ContentTypeError:
                 print("aiohttp failed for rest query")
                 # Fall back on non-async requests
                 async with self.semaphore:
-                    r_requests = requests.get(
+                    r_requests = get(
                         f"https://api.github.com/{path}",
                         headers=headers,
                         params=tuple(params.items()),
                         timeout=10,
                     )
                     if r_requests.status_code == 202:
-                        print("A path returned 202. Retrying...")
-                        await asyncio.sleep(5)
+                        # print("A path returned 202. Retrying...")
+                        await sleep(5)
                         continue
                     if r_requests.status_code == 200:
                         return r_requests.json()
@@ -251,7 +251,7 @@ class Stats:
         self,
         username: str,
         access_token: str,
-        session: aiohttp.ClientSession,
+        session: ClientSession,
         exclude_repos: set[str] | None = None,
         exclude_langs: set[str] | None = None,
         ignore_forked_repos: bool = False,
@@ -522,16 +522,16 @@ async def main() -> None:
     """
     Used mostly for testing; this module is not usually run standalone
     """
-    access_token = os.getenv("ACCESS_TOKEN")
-    user = os.getenv("GITHUB_ACTOR")
+    access_token = getenv("ACCESS_TOKEN")
+    user = getenv("GITHUB_ACTOR")
     if access_token is None or user is None:
         raise RuntimeError(
             "ACCESS_TOKEN and GITHUB_ACTOR environment variables cannot be None!"
         )
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         s = Stats(user, access_token, session)
         print(await s.to_str())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run(main())
